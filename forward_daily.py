@@ -21,14 +21,20 @@ COINS = ['BTC','ETH','SOL','LTC','LINK','ADA','DOGE','XLM']
 CAPITAL = 10000
 LOG = os.path.join(os.path.dirname(os.path.abspath(__file__)), 'forward_log.csv')
 
+# 幣安主站 api.binance.com 會封鎖美國IP(451), GitHub Actions跑板機在美國會全掛。
+# data-api.binance.vision 是官方公開資料鏡像, 不擋美國IP, klines資料一致。主站失敗自動換鏡像。
+BN_HOSTS = ['https://data-api.binance.vision', 'https://api.binance.com']
 def fetch_bn(sym, days=400):
     end = int(time.time()*1000); start = end - days*86400*1000
     rows=[]; cur=start
     while cur < end:
-        try:
-            r = requests.get('https://api.binance.com/api/v3/klines',
-                params=dict(symbol=sym, interval='1d', startTime=cur, limit=1000), timeout=20).json()
-        except: break
+        r = None
+        for host in BN_HOSTS:
+            try:
+                resp = requests.get(host+'/api/v3/klines',
+                    params=dict(symbol=sym, interval='1d', startTime=cur, limit=1000), timeout=20).json()
+                if isinstance(resp, list): r = resp; break   # 成功才跳出, 否則試下一個host
+            except: continue
         if not isinstance(r,list) or not r: break
         rows += r; cur = r[-1][0]+1
         if len(r) < 1000: break
